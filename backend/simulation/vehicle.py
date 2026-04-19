@@ -35,7 +35,7 @@ PROFILES = {
         "p": 0.2, "dath": 0.2, "bias_dir": "Right", "color": "#808080"
     },
     ProfileType.AGGRESSIVE: {
-        "v_mult": (1.15, 0.05), "T": (0.05, 0.05), "s0": (1.5, 0.2), "a": (2.5, 0.5), "b": (4.0, 0.8), 
+        "v_mult": (1.15, 0.05), "T": (0.05, 0.05), "s0": (1.5, 0.2), "a": (4, 0.5), "b": (4.0, 0.8), 
         "p": 0.0, "dath": 0.05, "bias_dir": "None", "color": "#FF0000"
     },
     ProfileType.CAMPER: {
@@ -149,31 +149,22 @@ class Vehicle:
         s_true = max(true_gap - self.length, 0.1)
         dv = v - lead_vehicle.velocity
 
-        dynamic_approach = (v * dv) / (2.0 * math.sqrt(a * b))
-        # Aggressive drivers actively ignore safe approach braking physics
-        if self.profile == "AGGRESSIVE":
-            dynamic_approach *= 0.15 
-
         # Desired dynamic gap
-        s_star = self.min_gap + max(0.0, v * self.time_headway + dynamic_approach)
+        s_star = self.min_gap + max(0.0, v * self.time_headway + (v * dv) / (2.0 * math.sqrt(a * b)))
         
         # Interaction ratio
         z = s_star / s_true
 
-        # IIDM Piecewise Formulation (Treiber/Kesting stable transition)
-        if a_free >= 0:
-            if z >= 1.0:
-                # Strongly constrained regime
-                return a * (1.0 - z**2)
-            else:
-                # Weakly constrained / free-flow blending
-                return a_free * (1.0 - z**(2 * a / a_free))
+        # IIDM Piecewise Formulation
+        if z >= 1.0:
+            # Strongly constrained regime
+            return a * (1.0 - z**2)
         else:
-            # v > v0 case: Neutralize over-speeding even with clear road
-            if z >= 1.0:
-                return a_free + a * (1.0 - z**2)
+            # Weakly constrained / free-flow blending
+            if a_free > 0.01:
+                return a_free * (1.0 - z**(2 * a / a_free))
             else:
-                return a_free
+                return a * (1.0 - z**2)  # Fallback near v0
 
     # ────────────────────────────────────────────────────────────────────
     #  Asymmetric MOBIL
