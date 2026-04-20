@@ -1,7 +1,5 @@
 import { useMemo } from 'react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -98,10 +96,13 @@ export function TelemetryChart({ data }: TelemetryChartProps) {
               backdropFilter: 'blur(10px)',
             }}
             labelFormatter={(value) => `${value}s`}
-            formatter={(value: number, name: string) => {
-              if (name === 'speed') return [`${value} mph`, 'Avg Speed'];
-              if (name === 'flow') return [`${value * 100} veh/h`, 'Flow'];
-              return [value, name];
+            formatter={(value, name) => {
+              const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
+              const seriesName = String(name ?? '');
+
+              if (seriesName === 'speed') return [`${numericValue} mph`, 'Avg Speed'];
+              if (seriesName === 'flow') return [`${numericValue * 100} veh/h`, 'Flow'];
+              return [numericValue, seriesName];
             }}
           />
           <Area

@@ -26,7 +26,7 @@ export function Slider({
   accentColor = 'var(--accent-blue)',
   onChange,
 }: SliderProps) {
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

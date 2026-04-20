@@ -19,6 +19,7 @@ class VehicleState:
     color: str
     acceleration: float
     gap: float
+    raw_gap: float
 
 class ProfileType(str, Enum):
     COMMUTER = "COMMUTER"
@@ -31,27 +32,27 @@ class ProfileType(str, Enum):
 # Profiles now define Gaussian distributions (mu, sigma) to enforce inter-driver heterogeneity.
 PROFILES = {
     ProfileType.COMMUTER: {
-        "v_mult": (1.0, 0.05), "T": (0.8, 0.15), "s0": (2.0, 0.2), "a": (1.4, 0.4), "b": (2.0, 0.5), 
+        "v_mult": (1.0, 0.05), "T": (1.05, 0.12), "s0": (1.5, 0.25), "a": (1.4, 0.4), "b": (2.0, 0.5), 
         "p": 0.2, "dath": 0.2, "bias_dir": "Right", "color": "#808080"
     },
     ProfileType.AGGRESSIVE: {
-        "v_mult": (1.15, 0.05), "T": (0.05, 0.05), "s0": (1.5, 0.2), "a": (4, 0.5), "b": (4.0, 0.8), 
+        "v_mult": (1.15, 0.05), "T": (0.8, 0.08), "s0": (0.8, 0.15), "a": (4, 0.5), "b": (4.0, 0.8), 
         "p": 0.0, "dath": 0.05, "bias_dir": "None", "color": "#FF0000"
     },
     ProfileType.CAMPER: {
-        "v_mult": (0.95, 0.05), "T": (1.0, 0.2), "s0": (2.0, 0.2), "a": (1.0, 0.3), "b": (1.5, 0.4), 
+        "v_mult": (0.95, 0.05), "T": (1.4, 0.18), "s0": (2.0, 0.25), "a": (1.0, 0.3), "b": (1.5, 0.4), 
         "p": 0.0, "dath": 0.5, "bias_dir": "Left", "color": "#800080"
     },
     ProfileType.CAUTIOUS: {
-        "v_mult": (0.85, 0.05), "T": (1.5, 0.2), "s0": (3.0, 0.3), "a": (0.8, 0.2), "b": (1.0, 0.3), 
+        "v_mult": (0.85, 0.05), "T": (1.7, 0.2), "s0": (2.8, 0.3), "a": (0.8, 0.2), "b": (1.0, 0.3), 
         "p": 0.5, "dath": 0.8, "bias_dir": "Right", "color": "#FFFF00"
     },
     ProfileType.FOLLOWER: {
-        "v_mult": (1.05, 0.05), "T": (0.8, 0.15), "s0": (2.0, 0.2), "a": (1.5, 0.4), "b": (2.0, 0.5), 
+        "v_mult": (1.05, 0.05), "T": (1.0, 0.1), "s0": (1.4, 0.2), "a": (1.5, 0.4), "b": (2.0, 0.5), 
         "p": 0.3, "dath": 0.1, "bias_dir": "Right", "color": "#0000FF"
     },
     ProfileType.PACER: {
-        "v_mult": (1.0, 0.02), "T": (1.8, 0.1), "s0": (2.5, 0.1), "a": (0.8, 0.1), "b": (0.8, 0.1), 
+        "v_mult": (1.0, 0.02), "T": (1.55, 0.15), "s0": (2.2, 0.2), "a": (0.8, 0.1), "b": (0.8, 0.1), 
         "p": 1.0, "dath": 0.5, "bias_dir": "None", "color": "#00FF00"
     }
 }
@@ -83,8 +84,8 @@ class Vehicle:
         self.base_desired_speed: float = global_speed_limit * self.v_mult
         self.desired_speed: float = self.base_desired_speed
 
-        self.time_headway: float = max(0.5, random.gauss(*cfg["T"]))
-        self.min_gap: float = max(0.5, random.gauss(*cfg["s0"]))
+        self.time_headway: float = max(0.7, random.gauss(*cfg["T"]))
+        self.min_gap: float = max(0.75, random.gauss(*cfg["s0"]))
         self.max_acceleration: float = max(0.3, random.gauss(*cfg["a"]))
         self.comfortable_decel: float = max(0.5, random.gauss(*cfg["b"]))
         self.accel_exponent: float = 4.0
@@ -92,7 +93,7 @@ class Vehicle:
         # MOBIL & Asymmetric Parameters
         self.politeness: float = cfg["p"]
         self.lane_change_threshold: float = cfg["dath"]
-        self.safe_decel: float = 6.0 if profile == "AGGRESSIVE" else 4.0
+        self.safe_decel: float = 9.0 if profile == "AGGRESSIVE" else 4.0
         self.bias_dir: str = cfg["bias_dir"]
         self.asymmetric_bias: float = 0.3  # m/s² continuous pressure
         self.lane_change_cooldown: float = 0.0
@@ -104,8 +105,9 @@ class Vehicle:
         self.lane: int = lane
         self.actual_lane: float = float(lane)
         self.radial_velocity: float = 0.0
-        self.length: float = 4.5
-        self.current_gap: float = 0.0
+        self.length: float = 4
+        self.current_gap: float = float("inf")
+        self.current_raw_gap: float = float("inf")
 
         # Human Factors: Action Points & Wiener Process (Stochasticity)
         self.reaction_time: float = max(0.6, random.gauss(1.2, 0.2))
@@ -113,9 +115,9 @@ class Vehicle:
         
         self.wiener_s: float = 0.0
         self.wiener_v: float = 0.0
-        self.tau_wiener: float = 15.0  # Correlation time (s)
-        self.v_s: float = 0.1          # Spatial estimation variance
-        self.sigma_r: float = 0.1      # Velocity estimation variance
+        self.tau_wiener: float = 10.0  # Correlation time (s)
+        self.v_s: float = 0.25         # Spatial estimation variance (increased error)
+        self.sigma_r: float = 0.25     # Velocity estimation variance (increased error)
 
     # ────────────────────────────────────────────────────────────────────
     #  IIDM — Improved Intelligent Driver Model + Human Perception
@@ -155,16 +157,33 @@ class Vehicle:
         # Interaction ratio
         z = s_star / s_true
 
-        # IIDM Piecewise Formulation
-        if z >= 1.0:
-            # Strongly constrained regime
-            return a * (1.0 - z**2)
-        else:
-            # Weakly constrained / free-flow blending
-            if a_free > 0.01:
-                return a_free * (1.0 - z**(2 * a / a_free))
+        # IIDM Piecewise Formulation (Treiber/Kesting stable transition)
+        accel = 0.0
+        if a_free > 1e-6:
+            if z >= 1.0:
+                # Strongly constrained regime
+                accel = a * (1.0 - z**2)
             else:
-                return a * (1.0 - z**2)  # Fallback near v0
+                # Weakly constrained / free-flow blending
+                # Safety check for a_free near zero handled by block condition
+                accel = a_free * (1.0 - z**(2 * a / a_free))
+        elif a_free >= -1e-6:
+            # v ~= v0 regime
+            if z >= 1.0:
+                accel = a * (1.0 - z**2)
+            else:
+                accel = 0.0
+        else:
+            # v > v0 case: Neutralize over-speeding even with clear road
+            if z >= 1.0:
+                accel = a_free + a * (1.0 - z**2)
+            else:
+                accel = a_free
+
+        # Safety: Ensure numeric stability
+        if not math.isfinite(accel):
+            return 0.0
+        return accel
 
     # ────────────────────────────────────────────────────────────────────
     #  Asymmetric MOBIL
@@ -226,7 +245,9 @@ class Vehicle:
         gap: Optional[float]
     ) -> None:
         """Second-order Ballistic Update with Action Point evaluation."""
-        self.current_gap = gap if gap is not None else 0.0
+        raw_gap = gap if gap is not None else float("inf")
+        self.current_raw_gap = raw_gap
+        self.current_gap = max(raw_gap - self.length, 0.0) if math.isfinite(raw_gap) else float("inf")
 
         # Acceleration computed dynamically every frame (no cognitive freezing)
         self.acceleration = self.calculate_iidm_acceleration(lead_vehicle, gap)
@@ -244,7 +265,7 @@ class Vehicle:
             self.acceleration = 0.0
         else:
             self.position += (self.velocity * dt) + (0.5 * self.acceleration * (dt ** 2))
-            self.velocity = v_next
+            self.velocity = min(v_next, 80.0)  # Safety Cap: ~180 mph
 
         # Smooth lateral lane shift
         diff = self.lane - self.actual_lane
@@ -270,5 +291,6 @@ class Vehicle:
             profile=self.profile,
             color=self.color,
             acceleration=round(self.acceleration, 2),
-            gap=round(self.current_gap, 1)
+            gap=round(self.current_gap, 1) if math.isfinite(self.current_gap) else 999.0,
+            raw_gap=round(self.current_raw_gap, 1) if math.isfinite(self.current_raw_gap) else 999.0,
         )

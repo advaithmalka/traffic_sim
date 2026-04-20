@@ -87,6 +87,9 @@ export function useSimulation(): SimulationState {
                 if (!prev || prev.circumference !== frame.road.circumference || prev.num_lanes !== frame.road.num_lanes || prev.paused !== frame.road.paused) {
                   return frame.road;
                 }
+                if (prev.lane_width !== frame.road.lane_width || prev.speed_limit_mph !== frame.road.speed_limit_mph) {
+                  return frame.road;
+                }
                 return prev;
               });
             }

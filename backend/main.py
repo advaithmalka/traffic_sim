@@ -10,13 +10,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
+import random
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from simulation.ring_road import RingRoad
+from simulation.ring_road import (
+    DEFAULT_CIRCUMFERENCE_M,
+    DEFAULT_LANE_WIDTH_M,
+    DEFAULT_NUM_LANES,
+    RingRoad,
+)
 
 # ── Logging ─────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -59,10 +66,15 @@ class ConnectionManager:
 
 # ── Global State ────────────────────────────────────────────────────────
 manager = ConnectionManager()
-ring_road = RingRoad(circumference=191.5, num_lanes=2, lane_width=3.0)
+ring_road = RingRoad(
+    circumference=DEFAULT_CIRCUMFERENCE_M,
+    num_lanes=DEFAULT_NUM_LANES,
+    lane_width=DEFAULT_LANE_WIDTH_M,
+)
 
-# Start with 20 vehicles
-INITIAL_VEHICLE_COUNT = 20
+DEFAULT_PROFILES = ("COMMUTER", "AGGRESSIVE", "CAMPER", "CAUTIOUS", "FOLLOWER", "PACER")
+DEFAULT_PROFILE_COPIES = 3
+INITIAL_VEHICLE_COUNT = len(DEFAULT_PROFILES) * DEFAULT_PROFILE_COPIES
 TICK_RATE = 30  # ticks per second
 DT = 1.0 / TICK_RATE
 
@@ -72,44 +84,65 @@ class SimContext:
 sim_context = SimContext()
 
 
+def seed_initial_vehicles() -> None:
+    """Spawn the default cohort with even lane-balanced spacing."""
+    profiles = [profile for _ in range(DEFAULT_PROFILE_COPIES) for profile in DEFAULT_PROFILES]
+    random.Random(7).shuffle(profiles)
+
+    slots_per_lane = max(1, math.ceil(len(profiles) / ring_road.num_lanes))
+    longitudinal_spacing = ring_road.circumference / slots_per_lane
+    lane_phase_offset = longitudinal_spacing / ring_road.num_lanes
+    cruise_seed_speed = ring_road.desired_speed * 0.88
+
+    for idx, profile in enumerate(profiles):
+        lane = idx % ring_road.num_lanes
+        slot = idx // ring_road.num_lanes
+        position = (slot * longitudinal_spacing + lane * lane_phase_offset) % ring_road.circumference
+        vehicle = ring_road.add_vehicle(profile=profile, lane=lane, position=position)
+        vehicle.velocity = min(vehicle.desired_speed, cruise_seed_speed)
+
 # ── Simulation Loop ────────────────────────────────────────────────────
 async def simulation_loop() -> None:
     """Fixed-step game loop running at TICK_RATE TPS."""
     logger.info("Simulation loop started at %d TPS", TICK_RATE)
 
     # Seed initial vehicles
-    profiles = ["COMMUTER", "AGGRESSIVE", "CAMPER", "CAUTIOUS", "FOLLOWER", "PACER"]
-    for _ in range(3):
-        for p in profiles:
-            ring_road.add_vehicle(profile=p)
+    seed_initial_vehicles()
 
     tick = 0
     while True:
-        # 1. Advance physics via substepping to maintain numeric stability 
-        # at high fast-forward multipliers
-        for _ in range(sim_context.speed_multiplier):
-            ring_road.update(DT)
+        try:
+            # 1. Advance physics via substepping to maintain numeric stability 
+            # at high fast-forward multipliers
+            for _ in range(sim_context.speed_multiplier):
+                ring_road.update(DT)
 
-        # 2. Broadcast state to all clients
-        if manager.active_connections:
-            vehicle_states = ring_road.get_state()
-            telemetry = ring_road.get_telemetry()
-            payload = {
-                "type": "state",
-                "tick": tick,
-                "vehicles": vehicle_states,
-                "telemetry": telemetry,
-                "road": {
-                    "circumference": ring_road.circumference,
-                    "inner_radius": ring_road.inner_radius,
-                    "num_lanes": ring_road.num_lanes,
-                    "lane_width": ring_road.lane_width,
-                    "paused": ring_road.paused,
-                },
-            }
-            await manager.broadcast(payload)
+            # 2. Broadcast state to all clients
+            if manager.active_connections:
+                vehicle_states = ring_road.get_state()
+                telemetry = ring_road.get_telemetry()
+                payload = {
+                    "type": "state",
+                    "tick": tick,
+                    "vehicles": vehicle_states,
+                    "telemetry": telemetry,
+                    "road": {
+                        "circumference": ring_road.circumference,
+                        "inner_radius": ring_road.inner_radius,
+                        "num_lanes": ring_road.num_lanes,
+                        "lane_width": ring_road.lane_width,
+                        "speed_limit_mph": round(ring_road.desired_speed * 2.23694, 1),
+                        "paused": ring_road.paused,
+                    },
+                }
+                await manager.broadcast(payload)
 
-        tick += 1
+            tick += 1
+        except Exception:
+            logger.exception("CRITICAL: Error in simulation loop. Physics or Broadcast failed.")
+            # Optional: Add a small delay to prevent rapid-fire log bombing if it stays broken
+            await asyncio.sleep(1.0)
+            
         await asyncio.sleep(DT)
 
 
@@ -215,6 +248,12 @@ async def handle_command(command: dict[str, Any]) -> None:
         value = max(1, min(20, int(command.get("value", 1))))
         sim_context.speed_multiplier = value
         logger.info("Simulation speed multiplied to %dx", value)
+
+    elif cmd_type == "reset_simulation":
+        ring_road.reset()
+        sim_context.speed_multiplier = 1
+        seed_initial_vehicles()
+        logger.info("Simulation reset to defaults")
 
     else:
         logger.warning("Unknown command type: %s", cmd_type)

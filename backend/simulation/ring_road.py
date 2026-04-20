@@ -15,6 +15,11 @@ from typing import Any, Optional
 
 from .vehicle import Vehicle, VehicleState
 
+DEFAULT_CIRCUMFERENCE_M = 287.26
+DEFAULT_NUM_LANES = 2
+DEFAULT_LANE_WIDTH_M = 4.5
+DEFAULT_SPEED_LIMIT_MPS = 30.0
+
 
 class RingRoad:
     """
@@ -24,9 +29,9 @@ class RingRoad:
 
     def __init__(
         self,
-        circumference: float = 191.5,
-        num_lanes: int = 2,
-        lane_width: float = 3.0,
+        circumference: float = DEFAULT_CIRCUMFERENCE_M,
+        num_lanes: int = DEFAULT_NUM_LANES,
+        lane_width: float = DEFAULT_LANE_WIDTH_M,
     ) -> None:
         self.circumference: float = circumference
         self.num_lanes: int = num_lanes
@@ -42,7 +47,7 @@ class RingRoad:
 
         # Simulation configuration (mutable at runtime)
         self.global_aggression: float = 0.5
-        self.desired_speed: float = 30.0  # m/s (~108 km/h)
+        self.desired_speed: float = DEFAULT_SPEED_LIMIT_MPS  # m/s (~108 km/h)
         self.paused: bool = False
 
     # ────────────────────────────────────────────────────────────────────
@@ -336,3 +341,12 @@ class RingRoad:
     def toggle_pause(self) -> None:
         """Toggle the running state of the simulation."""
         self.paused = not self.paused
+
+    def reset(self) -> None:
+        """Restore the simulation to default topological state."""
+        self.vehicles.clear()
+        self.num_lanes = DEFAULT_NUM_LANES
+        self.lane_width = DEFAULT_LANE_WIDTH_M
+        self.set_circumference(DEFAULT_CIRCUMFERENCE_M)  # 150ft radius
+        self.desired_speed = DEFAULT_SPEED_LIMIT_MPS
+        self.paused = False

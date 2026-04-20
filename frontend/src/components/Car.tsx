@@ -48,7 +48,7 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
     const c = new THREE.Color(color || '#ffffff');
     // Reset standard materials cache
     bodyMatsRef.current = [];
-    
+
     clone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
@@ -90,7 +90,7 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
     // Update Brake Light dynamically
     const accel = vehicle.acceleration || 0.0;
     if (brakeLightRef.current) {
-       brakeLightRef.current.intensity = accel < -0.5 ? 15.0 : 0.0;
+      brakeLightRef.current.intensity = accel < -0.5 ? 15.0 : 0.0;
     }
 
     // High-frequency UI Label DOM manual updates
@@ -99,24 +99,24 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
       gapLabelRef.current.innerText = `${safeGap.toFixed(1)}m`;
     }
     if (gapBarRef.current) {
-      const pct = Math.max(0, Math.min(100, (safeGap / 15.0) * 100));
+      const pct = Math.max(0, Math.min(100, (safeGap / 35.0) * 100));
       gapBarRef.current.style.width = `${pct}%`;
-      gapBarRef.current.style.background = safeGap < 3.0 ? '#ef4444' : '#10b981';
+      gapBarRef.current.style.background = safeGap < 8.0 ? '#ef4444' : safeGap < 15.0 ? '#f59e0b' : '#10b981';
     }
   });
 
   return (
-    <group 
+    <group
       ref={groupRef}
       onPointerOver={(e) => {
         e.stopPropagation();
         setHovered(true);
       }}
-      onPointerOut={(e) => {
+      onPointerOut={() => {
         setHovered(false);
       }}
     >
-      <primitive object={clonedScene} scale={0.004} />
+      <primitive object={clonedScene} scale={0.010} />
       <pointLight ref={brakeLightRef} position={[-2.5, 1.5, 0]} color="#ff0101" decay={2} distance={10} intensity={0} />
       {hovered && (
         <Html position={[0, 4.5, 0]} center zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
@@ -126,13 +126,13 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
             color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: '6px', transform: 'scale(0.8)', minWidth: '90px'
           }}>
-             <span style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', color }}>{profile}</span>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                <div style={{ flex: 1, height: '4px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                   <div ref={gapBarRef} style={{ height: '100%', width: '0%', background: '#10b981' }} />
-                </div>
-                <span ref={gapLabelRef} style={{ fontSize: '10px', width: '28px', textAlign: 'right', fontFamily: 'monospace' }}>--m</span>
-             </div>
+            <span style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', color }}>{profile}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <div style={{ flex: 1, height: '4px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div ref={gapBarRef} style={{ height: '100%', width: '0%', background: '#10b981' }} />
+              </div>
+              <span ref={gapLabelRef} style={{ fontSize: '10px', width: '28px', textAlign: 'right', fontFamily: 'monospace' }}>--m</span>
+            </div>
           </div>
         </Html>
       )}

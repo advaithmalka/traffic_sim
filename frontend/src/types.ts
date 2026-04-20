@@ -11,6 +11,7 @@ export interface VehicleData {
   color: string;
   acceleration: number;
   gap: number;
+  raw_gap: number;
 }
 
 export interface RoadData {
@@ -18,6 +19,7 @@ export interface RoadData {
   inner_radius: number;
   num_lanes: number;
   lane_width: number;
+  speed_limit_mph: number;
   paused: boolean;
 }
 
@@ -38,7 +40,16 @@ export interface SimulationFrame {
 }
 
 export interface ConfigCommand {
-  type: 'speed_limit' | 'num_lanes' | 'circumference' | 'toggle_pause' | 'add_profile' | 'remove_profile' | 'remove_all_profiles';
+  type:
+    | 'speed_limit'
+    | 'num_lanes'
+    | 'circumference'
+    | 'toggle_pause'
+    | 'add_profile'
+    | 'remove_profile'
+    | 'remove_all_profiles'
+    | 'set_sim_speed'
+    | 'reset_simulation';
   value?: number;
   profile?: string;
 }

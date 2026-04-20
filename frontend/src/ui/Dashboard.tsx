@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Slider } from './Slider';
 import { TelemetryChart } from './TelemetryChart';
 import type {
@@ -16,6 +16,10 @@ interface DashboardProps {
   road: RoadData | null;
 }
 
+const METERS_TO_FEET = 3.28084;
+const DEFAULT_TRACK_RADIUS_FT = 150;
+const DEFAULT_TRACK_CIRCUMFERENCE_FT = DEFAULT_TRACK_RADIUS_FT * 2 * Math.PI;
+
 /**
  * Glassmorphic sidebar overlay with controls and telemetry.
  */
@@ -26,12 +30,22 @@ export function Dashboard({
   sendConfig,
   road,
 }: DashboardProps) {
-  const [speedLimit, setSpeedLimit] = useState(65);
+  const [speedLimit, setSpeedLimit] = useState(67);
   const [lanes, setLanes] = useState(2);
-  const [circumferenceFt, setCircumferenceFt] = useState(628); // 100ft radius * 2 * PI
+  const [circumferenceFt, setCircumferenceFt] = useState(DEFAULT_TRACK_CIRCUMFERENCE_FT);
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'profiles' | 'environment'>('profiles');
   const [simSpeed, setSimSpeed] = useState<number>(1);
+
+  useEffect(() => {
+    if (!road) {
+      return;
+    }
+
+    setSpeedLimit(Math.round(road.speed_limit_mph));
+    setLanes(road.num_lanes);
+    setCircumferenceFt(road.circumference * METERS_TO_FEET);
+  }, [road]);
 
   const handleRemoveAll = useCallback(() => {
     sendConfig({ type: 'remove_all_profiles' });
@@ -74,6 +88,11 @@ export function Dashboard({
     },
     [sendConfig]
   );
+
+  const handleResetSimulation = useCallback(() => {
+    setSimSpeed(1);
+    sendConfig({ type: 'reset_simulation' });
+  }, [sendConfig]);
 
   const handlePause = useCallback(() => {
     sendConfig({ type: 'toggle_pause' });
@@ -131,10 +150,35 @@ export function Dashboard({
             display: 'flex',
             flexDirection: 'column',
             gap: '4px',
+            position: 'relative'
           }}
         >
+          {/* Connection status overlay */}
+          {!connected && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.8)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 100,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '16px',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#ef4444',
+              textAlign: 'center',
+              padding: '20px'
+            }}>
+              <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
+              <div style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Backend Disconnected</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Reconnecting...</div>
+            </div>
+          )}
+
           {/* Header */}
-          <div style={{ marginBottom: '8px' }}>
+          <div style={{ marginBottom: '8px', zIndex: 1 }}>
             <div
               style={{
                 display: 'flex',
@@ -272,9 +316,9 @@ export function Dashboard({
                 ].map((prof) => {
                   const count = telemetry?.profile_counts?.[prof.id] || 0;
                   return (
-                    <ProfileItem 
-                      key={prof.id} 
-                      prof={prof} 
+                    <ProfileItem
+                      key={prof.id}
+                      prof={prof}
                       count={count}
                       onAdd={() => handleAddProfile(prof.id)}
                       onRemove={() => handleRemoveProfile(prof.id)}
@@ -337,11 +381,38 @@ export function Dashboard({
                 value={speedLimit}
                 min={15}
                 max={150}
-                step={5}
+                step={1}
                 unit=" mph"
                 accentColor="var(--accent-amber)"
                 onChange={handleSpeedLimit}
               />
+
+              <button
+                onClick={handleResetSimulation}
+                style={{
+                  width: '100%',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  color: 'var(--accent-blue)',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  marginTop: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.25)')}
+                onMouseOut={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)')}
+              >
+                <span>↺</span> RESET TO DEFAULTS
+              </button>
             </div>
           )}
 
@@ -467,8 +538,8 @@ function ProfileItem({ prof, count, onAdd, onRemove }: any) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-      <div 
-        onMouseEnter={() => setHovered(true)} 
+      <div
+        onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'help' }}
       >
@@ -503,7 +574,7 @@ function ProfileItem({ prof, count, onAdd, onRemove }: any) {
 
       {/* Buttons */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <button 
+        <button
           onClick={onRemove}
           disabled={count <= 0}
           style={{
@@ -518,7 +589,7 @@ function ProfileItem({ prof, count, onAdd, onRemove }: any) {
           }}
         >-</button>
         <span style={{ width: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>{count}</span>
-        <button 
+        <button
           onClick={onAdd}
           style={{
             background: 'rgba(255, 255, 255, 0.05)',
