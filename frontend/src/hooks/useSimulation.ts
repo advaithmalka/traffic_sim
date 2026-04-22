@@ -87,7 +87,11 @@ export function useSimulation(): SimulationState {
                 if (!prev || prev.circumference !== frame.road.circumference || prev.num_lanes !== frame.road.num_lanes || prev.paused !== frame.road.paused) {
                   return frame.road;
                 }
-                if (prev.lane_width !== frame.road.lane_width || prev.speed_limit_mph !== frame.road.speed_limit_mph) {
+                if (
+                  prev.lane_width !== frame.road.lane_width
+                  || prev.speed_limit_mph !== frame.road.speed_limit_mph
+                  || prev.track_type !== frame.road.track_type
+                ) {
                   return frame.road;
                 }
                 return prev;
@@ -101,8 +105,15 @@ export function useSimulation(): SimulationState {
               setTelemetry(frame.telemetry);
 
               setTelemetryHistory((prev) => {
+                if (frame.road?.paused) {
+                  return prev;
+                }
+
                 const snapshot: TelemetrySnapshot = {
-                  timestamp: Date.now(),
+                  elapsedMs:
+                    prev.length === 0
+                      ? 0
+                      : prev[prev.length - 1].elapsedMs + TELEMETRY_INTERVAL_MS,
                   ...frame.telemetry,
                 };
                 const next = [...prev, snapshot];

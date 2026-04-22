@@ -33,6 +33,12 @@ class RingRoad:
         num_lanes: int = DEFAULT_NUM_LANES,
         lane_width: float = DEFAULT_LANE_WIDTH_M,
     ) -> None:
+        self.track_type: str = "ring"
+        self.track_label: str = "Ring Road"
+        self.straight_length: float = 0.0
+        self.aux_lane_start: float = 0.0
+        self.merge_start: float = 0.0
+        self.merge_end: float = 0.0
         self.circumference: float = circumference
         self.num_lanes: int = num_lanes
         self.lane_width: float = lane_width
@@ -60,6 +66,7 @@ class RingRoad:
             lane = random.randint(0, self.num_lanes - 1)
         if position is None:
             position = random.uniform(0, self.circumference)
+        lane, position = self.normalize_spawn(lane, position)
 
         v = Vehicle(
             position=position,
@@ -92,6 +99,24 @@ class RingRoad:
             [v for v in self.vehicles if v.lane == lane],
             key=lambda v: v.position,
         )
+
+    def is_lane_available(self, lane: int, position: float) -> bool:
+        """Return whether the requested lane exists at this longitudinal position."""
+        return 0 <= lane < self.num_lanes
+
+    def normalize_spawn(self, lane: int, position: float) -> tuple[int, float]:
+        """Clamp a spawn request onto a valid lane and wrapped position."""
+        wrapped_position = position % self.circumference
+        clamped_lane = max(0, min(lane, self.num_lanes - 1))
+
+        if not self.is_lane_available(clamped_lane, wrapped_position):
+            clamped_lane = 0
+
+        return clamped_lane, wrapped_position
+
+    def lane_offset(self, actual_lane: float, position: float) -> float:
+        """Return the effective lane offset used for rendering."""
+        return actual_lane
 
     def _circular_gap(self, pos_behind: float, pos_ahead: float) -> float:
         """Arc-length gap from *pos_behind* to *pos_ahead*, wrapping."""
@@ -193,6 +218,9 @@ class RingRoad:
 
     def _try_lane_change(self, vehicle: Vehicle, target_lane: int) -> None:
         """Evaluate and execute a MOBIL lane change if criteria are met."""
+        if not self.is_lane_available(target_lane, vehicle.position):
+            return
+
         # Current situation
         current_accel = vehicle.acceleration
 
@@ -268,7 +296,8 @@ class RingRoad:
         The vehicle is placed at the CENTER of its current structural floating inner-lane.
         Rotation applies a yaw angle physically turning the car along vector derivatives.
         """
-        radius = self.inner_radius + vehicle.actual_lane * self.lane_width + self.lane_width / 2.0
+        lane_offset = self.lane_offset(vehicle.actual_lane, vehicle.position)
+        radius = self.inner_radius + lane_offset * self.lane_width + self.lane_width / 2.0
         theta = (vehicle.position / self.circumference) * 2.0 * math.pi
         x = radius * math.cos(theta)
         y = radius * math.sin(theta)

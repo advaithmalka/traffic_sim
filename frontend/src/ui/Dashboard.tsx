@@ -17,8 +17,7 @@ interface DashboardProps {
 }
 
 const METERS_TO_FEET = 3.28084;
-const DEFAULT_TRACK_RADIUS_FT = 150;
-const DEFAULT_TRACK_CIRCUMFERENCE_FT = DEFAULT_TRACK_RADIUS_FT * 2 * Math.PI;
+const DEFAULT_TRACK_CIRCUMFERENCE_FT = 287.26 * METERS_TO_FEET;
 
 /**
  * Glassmorphic sidebar overlay with controls and telemetry.
@@ -308,9 +307,9 @@ export function Dashboard({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                 {[
                   { id: 'COMMUTER', label: 'Commuter', color: '#808080', tagline: 'The Baseline Driver', desc: 'The control group of the highway. Commuters drive at the speed limit, maintain standard following distances, and behave predictably. They change lanes only when an obvious speed advantage presents itself without disrupting the flow of others.' },
-                  { id: 'AGGRESSIVE', label: 'Weaver', color: '#FF0000', tagline: 'High Speed, Low Patience', desc: 'Driven by a desire to maximize speed at all costs. This profile tailgates heavily, brakes violently, and forcefully weaves into any available gap. Their erratic speed changes are the primary catalyst for triggering ripple effects and phantom traffic jams.' },
-                  { id: 'CAMPER', label: 'Left Camper', color: '#800080', tagline: 'The Rolling Roadblock', desc: 'Stubbornly occupies the innermost passing lane while driving exactly at—or slightly below—the speed limit. By refusing to yield to faster traffic, they create severe artificial bottlenecks and force other drivers into dangerous right-side passing maneuvers.' },
-                  { id: 'CAUTIOUS', label: 'Cautious', color: '#FFFF00', tagline: 'Overly Cautious', desc: 'Prioritizes absolute safety over speed. They drive under the limit, leave massive multi-car gaps ahead of them, and are highly reluctant to change lanes. While safe individually, their slow acceleration can drag down the overall throughput of a busy highway.' },
+                  { id: 'AGGRESSIVE', label: 'Weaver', color: '#FF0000', tagline: 'High Speed, Low Patience', desc: 'Driven by a desire to maximize speed at all costs. This profile tailgates heavily, brakes violently, and forcefully weaves into any available gap. Their erratic speed changes can trigger ripple effects and phantom traffic jams.' },
+                  { id: 'CAMPER', label: 'Left Camper', color: '#800080', tagline: 'The Rolling Roadblock', desc: 'Stubbornly occupies the innermost passing lane while driving exactly at—or slightly below—the speed limit. By refusing to yield to faster traffic, they create severe artificial bottlenecks and force other drivers into dangerous right-side passing maneuvers. These drivers create the most traffic.' },
+                  { id: 'CAUTIOUS', label: 'Cautious', color: '#FFFF00', tagline: 'Overly Cautious', desc: 'Prioritizes absolute safety over speed. They drive under the limit, leave massive multi-car gaps ahead of them, and are highly reluctant to change lanes. While they think its safe, operating at such a slow pace can drag down the overall throughput of a busy highway and actually reduce safety.' },
                   { id: 'FOLLOWER', label: 'Pass & Return', color: '#0000FF', tagline: 'Perfect Lane Discipline', desc: 'The gold standard of highway etiquette. They treat the left lane strictly as a passing zone. Once they have successfully overtaken slower traffic, they will proactively merge back into the cruising lanes to maintain optimal systemic flow.' },
                   { id: 'PACER', label: 'Auto Pacer', color: '#00FF00', tagline: 'The Jam Breaker', desc: 'An algorithmic agent designed to cure gridlock. Rather than racing to the bumper of the car ahead, the pacer maintains a steady, moderate speed and a massive buffer gap. This allows it to absorb the shockwaves of aggressive braking ahead, keeping the traffic behind it moving in a continuous flow.' },
                 ].map((prof) => {
@@ -365,14 +364,14 @@ export function Dashboard({
 
               <Slider
                 id="size-slider"
-                label="Track Radius"
-                value={Math.round(circumferenceFt / (2 * Math.PI))}
-                min={50}
-                max={500}
-                step={10}
+                label="Lap Length"
+                value={Math.round(circumferenceFt)}
+                min={400}
+                max={3000}
+                step={25}
                 unit=" ft"
                 accentColor="var(--accent-blue)"
-                onChange={(val) => handleCircumference(val * 2 * Math.PI)}
+                onChange={handleCircumference}
               />
 
               <Slider

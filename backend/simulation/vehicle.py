@@ -37,7 +37,11 @@ PROFILES = {
     },
     ProfileType.AGGRESSIVE: {
         "v_mult": (1.15, 0.05), "T": (0.8, 0.08), "s0": (0.8, 0.15), "a": (4, 0.5), "b": (4.0, 0.8), 
-        "p": 0.0, "dath": 0.05, "bias_dir": "None", "color": "#FF0000"
+        "p": 0.0, "dath": 0.05, "bias_dir": "None", "color": "#FF0000",
+        "slow_lead_headway_factor": 0.58,
+        "slow_lead_min_gap_factor": 0.72,
+        "slow_lead_activation_delta": 2.5,
+        "slow_lead_full_delta": 5.0,
     },
     ProfileType.CAMPER: {
         "v_mult": (0.95, 0.05), "T": (1.4, 0.18), "s0": (2.0, 0.25), "a": (1.0, 0.3), "b": (1.5, 0.4), 
@@ -52,8 +56,11 @@ PROFILES = {
         "p": 0.3, "dath": 0.1, "bias_dir": "Right", "color": "#0000FF"
     },
     ProfileType.PACER: {
-        "v_mult": (1.0, 0.02), "T": (1.55, 0.15), "s0": (2.2, 0.2), "a": (0.8, 0.1), "b": (0.8, 0.1), 
-        "p": 1.0, "dath": 0.5, "bias_dir": "None", "color": "#00FF00"
+        "v_mult": (1.03, 0.015), "T": (0.9, 0.06), "s0": (1.1, 0.12), "a": (1.4, 0.12), "b": (2.0, 0.2),
+        "p": 0.7, "dath": 0.25, "bias_dir": "None", "color": "#00FF00",
+        "cooperative_headway_factor": 0.97,
+        "cooperative_min_gap_factor": 0.96,
+        "cooperative_sync_window": 2.0,
     }
 }
 
@@ -89,6 +96,27 @@ class Vehicle:
         self.max_acceleration: float = max(0.3, random.gauss(*cfg["a"]))
         self.comfortable_decel: float = max(0.5, random.gauss(*cfg["b"]))
         self.accel_exponent: float = 4.0
+        self.slow_lead_headway_factor: float = max(
+            0.4, min(1.0, cfg.get("slow_lead_headway_factor", 1.0))
+        )
+        self.slow_lead_min_gap_factor: float = max(
+            0.4, min(1.0, cfg.get("slow_lead_min_gap_factor", 1.0))
+        )
+        self.slow_lead_activation_delta: float = max(
+            0.0, cfg.get("slow_lead_activation_delta", float("inf"))
+        )
+        self.slow_lead_full_delta: float = max(
+            0.1, cfg.get("slow_lead_full_delta", 1.0)
+        )
+        self.cooperative_headway_factor: float = max(
+            0.5, min(1.0, cfg.get("cooperative_headway_factor", 1.0))
+        )
+        self.cooperative_min_gap_factor: float = max(
+            0.5, min(1.0, cfg.get("cooperative_min_gap_factor", 1.0))
+        )
+        self.cooperative_sync_window: float = max(
+            0.1, cfg.get("cooperative_sync_window", 1.0)
+        )
 
         # MOBIL & Asymmetric Parameters
         self.politeness: float = cfg["p"]
@@ -151,8 +179,13 @@ class Vehicle:
         s_true = max(true_gap - self.length, 0.1)
         dv = v - lead_vehicle.velocity
 
+        min_gap, time_headway = self.get_effective_following_params(lead_vehicle)
+
         # Desired dynamic gap
-        s_star = self.min_gap + max(0.0, v * self.time_headway + (v * dv) / (2.0 * math.sqrt(a * b)))
+        s_star = min_gap + max(
+            0.0,
+            v * time_headway + (v * dv) / (2.0 * math.sqrt(a * b)),
+        )
         
         # Interaction ratio
         z = s_star / s_true
@@ -184,6 +217,49 @@ class Vehicle:
         if not math.isfinite(accel):
             return 0.0
         return accel
+
+    def get_effective_following_params(
+        self,
+        lead_vehicle: Optional[Vehicle],
+    ) -> tuple[float, float]:
+        """Adjust following params for profile-specific behavior."""
+        if lead_vehicle is None:
+            return self.min_gap, self.time_headway
+
+        min_gap = self.min_gap
+        time_headway = self.time_headway
+
+        # Automated pacers can safely run slightly tighter when platooning
+        # behind another speed-matched pacer, which raises roadway capacity.
+        if self.profile == ProfileType.PACER and lead_vehicle.profile == ProfileType.PACER:
+            speed_alignment = max(
+                0.0,
+                1.0 - (abs(self.velocity - lead_vehicle.velocity) / self.cooperative_sync_window),
+            )
+            if speed_alignment > 0.0:
+                min_gap *= 1.0 - (
+                    (1.0 - self.cooperative_min_gap_factor) * speed_alignment
+                )
+                time_headway *= 1.0 - (
+                    (1.0 - self.cooperative_headway_factor) * speed_alignment
+                )
+
+        speed_deficit = max(0.0, self.desired_speed - lead_vehicle.velocity)
+        if speed_deficit <= self.slow_lead_activation_delta:
+            return max(0.5, min_gap), max(0.45, time_headway)
+
+        pressure = min(
+            1.0,
+            (speed_deficit - self.slow_lead_activation_delta)
+            / self.slow_lead_full_delta,
+        )
+        min_gap *= (
+            1.0 - ((1.0 - self.slow_lead_min_gap_factor) * pressure)
+        )
+        time_headway *= (
+            1.0 - ((1.0 - self.slow_lead_headway_factor) * pressure)
+        )
+        return max(0.5, min_gap), max(0.45, time_headway)
 
     # ────────────────────────────────────────────────────────────────────
     #  Asymmetric MOBIL

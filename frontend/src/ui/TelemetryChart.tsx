@@ -18,12 +18,11 @@ interface TelemetryChartProps {
  * Real-time telemetry chart showing average speed and flow over time.
  */
 export function TelemetryChart({ data }: TelemetryChartProps) {
-  // Transform data for display (relative time in seconds)
+  // Transform data for display using active simulation time.
   const chartData = useMemo(() => {
     if (data.length === 0) return [];
-    const startTime = data[0].timestamp;
     return data.map((d) => ({
-      time: Math.round((d.timestamp - startTime) / 1000),
+      time: Math.round(d.elapsedMs / 1000),
       speed: d.avg_speed,
       flow: Math.round(d.flow / 100), // Scale down for dual-axis display
     }));

@@ -47,7 +47,7 @@ export function Slider({
   );
 
   // Calculate fill percentage for gradient track
-  const fillPercent = ((value - min) / (max - min)) * 100;
+  const fillPercent = max === min ? 100 : ((value - min) / (max - min)) * 100;
 
   return (
     <div className="slider-container" style={{ marginBottom: '16px' }}>

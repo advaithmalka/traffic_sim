@@ -1,5 +1,7 @@
 /* ── Simulation Data Types ────────────────────────────────────────────── */
 
+export type TrackType = 'ring' | 'merge';
+
 export interface VehicleData {
   id: number;
   x: number;
@@ -15,8 +17,13 @@ export interface VehicleData {
 }
 
 export interface RoadData {
+  track_type: TrackType;
   circumference: number;
   inner_radius: number;
+  straight_length: number;
+  aux_lane_start: number;
+  merge_start: number;
+  merge_end: number;
   num_lanes: number;
   lane_width: number;
   speed_limit_mph: number;
@@ -55,7 +62,7 @@ export interface ConfigCommand {
 }
 
 export interface TelemetrySnapshot {
-  timestamp: number;
+  elapsedMs: number;
   avg_speed: number;
   flow: number;
   count: number;

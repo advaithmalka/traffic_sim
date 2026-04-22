@@ -66,17 +66,32 @@ class ConnectionManager:
 
 # ── Global State ────────────────────────────────────────────────────────
 manager = ConnectionManager()
-ring_road = RingRoad(
-    circumference=DEFAULT_CIRCUMFERENCE_M,
-    num_lanes=DEFAULT_NUM_LANES,
-    lane_width=DEFAULT_LANE_WIDTH_M,
-)
-
-DEFAULT_PROFILES = ("COMMUTER", "AGGRESSIVE", "CAMPER", "CAUTIOUS", "FOLLOWER", "PACER")
-DEFAULT_PROFILE_COPIES = 3
-INITIAL_VEHICLE_COUNT = len(DEFAULT_PROFILES) * DEFAULT_PROFILE_COPIES
+DEFAULT_TRACK_TYPE = "ring"
+DEFAULT_PROFILE_COUNTS = {
+    "COMMUTER": 8,
+    "FOLLOWER": 3,
+    "CAUTIOUS": 3,
+    "AGGRESSIVE": 2,
+    "CAMPER": 1,
+    "PACER": 1,
+}
+INITIAL_VEHICLE_COUNT = sum(DEFAULT_PROFILE_COUNTS.values())
 TICK_RATE = 30  # ticks per second
 DT = 1.0 / TICK_RATE
+
+
+def create_track(track_type: str) -> RingRoad:
+    """Create the active track topology."""
+    # MergeRoad support is parked for now while ring-road behavior changes land.
+    return RingRoad(
+        circumference=DEFAULT_CIRCUMFERENCE_M,
+        num_lanes=DEFAULT_NUM_LANES,
+        lane_width=DEFAULT_LANE_WIDTH_M,
+    )
+
+
+road = create_track(DEFAULT_TRACK_TYPE)
+
 
 class SimContext:
     speed_multiplier: int = 1
@@ -85,21 +100,42 @@ sim_context = SimContext()
 
 
 def seed_initial_vehicles() -> None:
-    """Spawn the default cohort with even lane-balanced spacing."""
-    profiles = [profile for _ in range(DEFAULT_PROFILE_COPIES) for profile in DEFAULT_PROFILES]
+    """Spawn a realistic default traffic mix with even lane-balanced spacing."""
+    profiles = [
+        profile
+        for profile, count in DEFAULT_PROFILE_COUNTS.items()
+        for _ in range(count)
+    ]
     random.Random(7).shuffle(profiles)
 
-    slots_per_lane = max(1, math.ceil(len(profiles) / ring_road.num_lanes))
-    longitudinal_spacing = ring_road.circumference / slots_per_lane
-    lane_phase_offset = longitudinal_spacing / ring_road.num_lanes
-    cruise_seed_speed = ring_road.desired_speed * 0.88
+    slots_per_lane = max(1, math.ceil(len(profiles) / road.num_lanes))
+    longitudinal_spacing = road.circumference / slots_per_lane
+    lane_phase_offset = longitudinal_spacing / road.num_lanes
+    cruise_seed_speed = road.desired_speed * 0.88
 
     for idx, profile in enumerate(profiles):
-        lane = idx % ring_road.num_lanes
-        slot = idx // ring_road.num_lanes
-        position = (slot * longitudinal_spacing + lane * lane_phase_offset) % ring_road.circumference
-        vehicle = ring_road.add_vehicle(profile=profile, lane=lane, position=position)
+        lane = idx % road.num_lanes
+        slot = idx // road.num_lanes
+        position = (slot * longitudinal_spacing + lane * lane_phase_offset) % road.circumference
+        vehicle = road.add_vehicle(profile=profile, lane=lane, position=position)
         vehicle.velocity = min(vehicle.desired_speed, cruise_seed_speed)
+
+
+def build_road_payload() -> dict[str, Any]:
+    """Serialize the currently active track layout."""
+    return {
+        "track_type": road.track_type,
+        "circumference": road.circumference,
+        "inner_radius": road.inner_radius,
+        "straight_length": road.straight_length,
+        "aux_lane_start": road.aux_lane_start,
+        "merge_start": road.merge_start,
+        "merge_end": road.merge_end,
+        "num_lanes": road.num_lanes,
+        "lane_width": road.lane_width,
+        "speed_limit_mph": round(road.desired_speed * 2.23694, 1),
+        "paused": road.paused,
+    }
 
 # ── Simulation Loop ────────────────────────────────────────────────────
 async def simulation_loop() -> None:
@@ -115,25 +151,18 @@ async def simulation_loop() -> None:
             # 1. Advance physics via substepping to maintain numeric stability 
             # at high fast-forward multipliers
             for _ in range(sim_context.speed_multiplier):
-                ring_road.update(DT)
+                road.update(DT)
 
             # 2. Broadcast state to all clients
             if manager.active_connections:
-                vehicle_states = ring_road.get_state()
-                telemetry = ring_road.get_telemetry()
+                vehicle_states = road.get_state()
+                telemetry = road.get_telemetry()
                 payload = {
                     "type": "state",
                     "tick": tick,
                     "vehicles": vehicle_states,
                     "telemetry": telemetry,
-                    "road": {
-                        "circumference": ring_road.circumference,
-                        "inner_radius": ring_road.inner_radius,
-                        "num_lanes": ring_road.num_lanes,
-                        "lane_width": ring_road.lane_width,
-                        "speed_limit_mph": round(ring_road.desired_speed * 2.23694, 1),
-                        "paused": ring_road.paused,
-                    },
+                    "road": build_road_payload(),
                 }
                 await manager.broadcast(payload)
 
@@ -176,7 +205,7 @@ app.add_middleware(
 @app.get("/api/health")
 async def health_check() -> dict[str, str]:
     """Simple health endpoint."""
-    return {"status": "ok", "vehicles": str(len(ring_road.vehicles))}
+    return {"status": "ok", "vehicles": str(len(road.vehicles))}
 
 
 @app.websocket("/ws")
@@ -205,55 +234,59 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 async def handle_command(command: dict[str, Any]) -> None:
     """Process a configuration command from the frontend."""
+    global road
     cmd_type = command.get("type", "")
 
     if cmd_type == "add_profile":
         profile = command.get("profile", "COMMUTER")
-        ring_road.add_vehicle(profile=profile)
+        road.add_vehicle(profile=profile)
         logger.info("Spawned 1 %s", profile)
 
     elif cmd_type == "remove_profile":
         profile = command.get("profile", "COMMUTER")
-        ring_road.remove_vehicle_by_profile(profile)
+        road.remove_vehicle_by_profile(profile)
         logger.info("Removed 1 %s", profile)
         
     elif cmd_type == "remove_all_profiles":
-        ring_road.clear_vehicles()
+        road.clear_vehicles()
         logger.info("Removed all vehicles")
 
     elif cmd_type == "speed_limit":
         # Adjust speed limit from mph -> m/s
         value = max(10, min(150, float(command.get("value", 65))))
         speed_kmh = value * 1.60934
-        ring_road.set_speed_limit(speed_kmh)
+        road.set_speed_limit(speed_kmh)
         logger.info("Speed limit set to %.0f mph", value)
 
     elif cmd_type == "num_lanes":
         value = max(1, min(6, int(command.get("value", 2))))
-        ring_road.set_num_lanes(value)
+        road.set_num_lanes(value)
         logger.info("Lanes set to %d", value)
 
     elif cmd_type == "circumference":
         # Value arrives as circumference in feet, convert to meters for physics 
         value_ft = float(command.get("value", 500.0))
         value_m = max(50.0, min(5000.0, value_ft * 0.3048))
-        ring_road.set_circumference(value_m)
+        road.set_circumference(value_m)
         logger.info("Circumference set to %.1f m (%.1f ft)", value_m, value_ft)
 
     elif cmd_type == "toggle_pause":
-        ring_road.toggle_pause()
-        logger.info("Paused state toggled to %s", ring_road.paused)
+        road.toggle_pause()
+        logger.info("Paused state toggled to %s", road.paused)
 
     elif cmd_type == "set_sim_speed":
         value = max(1, min(20, int(command.get("value", 1))))
         sim_context.speed_multiplier = value
         logger.info("Simulation speed multiplied to %dx", value)
 
+    elif cmd_type == "set_track_type":
+        logger.info("Track switching is temporarily disabled; keeping %s", road.track_type)
+
     elif cmd_type == "reset_simulation":
-        ring_road.reset()
+        road.reset()
         sim_context.speed_multiplier = 1
         seed_initial_vehicles()
-        logger.info("Simulation reset to defaults")
+        logger.info("Simulation reset to %s defaults", road.track_type)
 
     else:
         logger.warning("Unknown command type: %s", cmd_type)
