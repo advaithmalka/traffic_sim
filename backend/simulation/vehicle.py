@@ -137,6 +137,9 @@ class Vehicle:
         self.current_gap: float = float("inf")
         self.current_raw_gap: float = float("inf")
 
+        # Incident state (forced hard-brake event triggered from the dashboard)
+        self.incident_timer: float = 0.0
+
         # Human Factors: Action Points & Wiener Process (Stochasticity)
         self.reaction_time: float = max(0.6, random.gauss(1.2, 0.2))
         self.time_since_action: float = self.reaction_time
@@ -314,10 +317,18 @@ class Vehicle:
     #  Kinematics: Ballistic Integration & Action Points
     # ────────────────────────────────────────────────────────────────────
 
+    def trigger_incident(self, duration: float = 3.0) -> None:
+        """Force this vehicle to slam the brakes for *duration* seconds.
+
+        IIDM treats `desired_speed = 0` as a pull-to-stop request, which produces
+        a realistic shockwave behind the offender as following traffic adapts.
+        """
+        self.incident_timer = max(self.incident_timer, duration)
+
     def update(
-        self, 
-        dt: float, 
-        lead_vehicle: Optional[Vehicle], 
+        self,
+        dt: float,
+        lead_vehicle: Optional[Vehicle],
         gap: Optional[float]
     ) -> None:
         """Second-order Ballistic Update with Action Point evaluation."""
@@ -327,6 +338,13 @@ class Vehicle:
 
         # Acceleration computed dynamically every frame (no cognitive freezing)
         self.acceleration = self.calculate_iidm_acceleration(lead_vehicle, gap)
+
+        # Incident override: slam the brakes regardless of lead-car state.
+        # IIDM treats desired_speed=0 as zero free-acceleration, which only brakes
+        # when crowding the lead — too gentle for an emergency stop. Override directly.
+        if self.incident_timer > 0.0:
+            self.acceleration = -8.0
+            self.incident_timer = max(0.0, self.incident_timer - dt)
 
         # Ballistic Kinematic Integration (Predictive Stopping Heuristic)
         v_next = self.velocity + self.acceleration * dt

@@ -2,6 +2,7 @@ import React from 'react';
 import { useSimulation } from './hooks/useSimulation';
 import { Scene } from './components/Scene';
 import { Dashboard } from './ui/Dashboard';
+import { OnboardingModal } from './ui/OnboardingModal';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
   constructor(props: {children: React.ReactNode}) {
@@ -95,6 +96,8 @@ export default function App() {
       >
         IDM + MOBIL Traffic Sim
       </div>
+
+      <OnboardingModal />
       </div>
     </ErrorBoundary>
   );

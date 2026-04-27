@@ -75,6 +75,37 @@ DEFAULT_PROFILE_COUNTS = {
     "CAMPER": 1,
     "PACER": 1,
 }
+
+PRESETS: dict[str, dict[str, int]] = {
+    "default": DEFAULT_PROFILE_COUNTS,
+    "rush_hour": {
+        "COMMUTER": 14,
+        "AGGRESSIVE": 4,
+        "CAUTIOUS": 4,
+        "CAMPER": 2,
+        "FOLLOWER": 2,
+    },
+    "autobahn": {
+        "AGGRESSIVE": 5,
+        "FOLLOWER": 5,
+        "COMMUTER": 3,
+    },
+    "robotaxi": {
+        "PACER": 16,
+        "COMMUTER": 2,
+    },
+    "campers": {
+        "CAMPER": 8,
+        "COMMUTER": 4,
+        "CAUTIOUS": 2,
+    },
+    "demolition": {
+        "AGGRESSIVE": 10,
+        "CAMPER": 4,
+        "CAUTIOUS": 4,
+    },
+}
+
 INITIAL_VEHICLE_COUNT = sum(DEFAULT_PROFILE_COUNTS.values())
 TICK_RATE = 30  # ticks per second
 DT = 1.0 / TICK_RATE
@@ -99,13 +130,15 @@ class SimContext:
 sim_context = SimContext()
 
 
-def seed_initial_vehicles() -> None:
-    """Spawn a realistic default traffic mix with even lane-balanced spacing."""
+def spawn_vehicles_evenly(profile_counts: dict[str, int]) -> None:
+    """Spawn vehicles for a given mix with even lane-balanced spacing."""
     profiles = [
         profile
-        for profile, count in DEFAULT_PROFILE_COUNTS.items()
+        for profile, count in profile_counts.items()
         for _ in range(count)
     ]
+    if not profiles:
+        return
     random.Random(7).shuffle(profiles)
 
     slots_per_lane = max(1, math.ceil(len(profiles) / road.num_lanes))
@@ -119,6 +152,11 @@ def seed_initial_vehicles() -> None:
         position = (slot * longitudinal_spacing + lane * lane_phase_offset) % road.circumference
         vehicle = road.add_vehicle(profile=profile, lane=lane, position=position)
         vehicle.velocity = min(vehicle.desired_speed, cruise_seed_speed)
+
+
+def seed_initial_vehicles() -> None:
+    """Spawn a realistic default traffic mix with even lane-balanced spacing."""
+    spawn_vehicles_evenly(DEFAULT_PROFILE_COUNTS)
 
 
 def build_road_payload() -> dict[str, Any]:
@@ -287,6 +325,24 @@ async def handle_command(command: dict[str, Any]) -> None:
         sim_context.speed_multiplier = 1
         seed_initial_vehicles()
         logger.info("Simulation reset to %s defaults", road.track_type)
+
+    elif cmd_type == "apply_preset":
+        preset = str(command.get("preset", "default"))
+        counts = PRESETS.get(preset)
+        if counts is None:
+            logger.warning("Unknown preset: %s", preset)
+            return
+        road.clear_vehicles()
+        spawn_vehicles_evenly(counts)
+        logger.info("Applied preset: %s (%d vehicles)", preset, sum(counts.values()))
+
+    elif cmd_type == "cause_incident":
+        if not road.vehicles:
+            logger.info("No vehicles to trigger incident on")
+            return
+        target = random.choice(road.vehicles)
+        target.trigger_incident(duration=3.0)
+        logger.info("Incident on vehicle %d (%s, lane %d)", target.id, target.profile, target.lane)
 
     else:
         logger.warning("Unknown command type: %s", cmd_type)

@@ -56,9 +56,12 @@ export interface ConfigCommand {
     | 'remove_profile'
     | 'remove_all_profiles'
     | 'set_sim_speed'
-    | 'reset_simulation';
+    | 'reset_simulation'
+    | 'apply_preset'
+    | 'cause_incident';
   value?: number;
   profile?: string;
+  preset?: string;
 }
 
 export interface TelemetrySnapshot {

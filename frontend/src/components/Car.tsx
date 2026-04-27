@@ -37,7 +37,8 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
   const bodyMatsRef = useRef<THREE.MeshStandardMaterial[]>([]);
   const gapLabelRef = useRef<HTMLSpanElement>(null);
   const gapBarRef = useRef<HTMLDivElement>(null);
-  const brakeLightRef = useRef<THREE.PointLight>(null);
+  const brakeLightLeftRef = useRef<THREE.PointLight>(null);
+  const brakeLightRightRef = useRef<THREE.PointLight>(null);
 
   // Load the GLB model
   const { scene } = useGLTF(MODEL_PATH);
@@ -87,11 +88,11 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
     groupRef.current.position.set(vehicle.x, 0, vehicle.y);
     groupRef.current.rotation.set(0, -vehicle.rotation + Math.PI / 2, 0);
 
-    // Update Brake Light dynamically
+    // Update Brake Light dynamically (both rear taillights)
     const accel = vehicle.acceleration || 0.0;
-    if (brakeLightRef.current) {
-      brakeLightRef.current.intensity = accel < -0.5 ? 15.0 : 0.0;
-    }
+    const brakeIntensity = accel < -0.5 ? 8.0 : 0.0;
+    if (brakeLightLeftRef.current) brakeLightLeftRef.current.intensity = brakeIntensity;
+    if (brakeLightRightRef.current) brakeLightRightRef.current.intensity = brakeIntensity;
 
     // High-frequency UI Label DOM manual updates
     const safeGap = vehicle.gap || 0.0;
@@ -117,7 +118,9 @@ function CarInner({ vehicleId, vehiclesRef, color, profile }: CarProps) {
       }}
     >
       <primitive object={clonedScene} scale={0.010} />
-      <pointLight ref={brakeLightRef} position={[-2.5, 1.5, 0]} color="#ff0101" decay={2} distance={10} intensity={0} />
+      {/* Rear taillights — local +Z is forward, so back-of-car sits at -Z */}
+      <pointLight ref={brakeLightLeftRef} position={[-0.5, 1, -1.9]} color="#ff0101" decay={2} distance={6} intensity={0} />
+      <pointLight ref={brakeLightRightRef} position={[0.5, 1, -1.9]} color="#ff0101" decay={2} distance={6} intensity={0} />
       {hovered && (
         <Html position={[0, 4.5, 0]} center zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
           <div style={{

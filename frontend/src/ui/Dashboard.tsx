@@ -50,6 +50,17 @@ export function Dashboard({
     sendConfig({ type: 'remove_all_profiles' });
   }, [sendConfig]);
 
+  const handleApplyPreset = useCallback(
+    (preset: string) => {
+      sendConfig({ type: 'apply_preset', preset });
+    },
+    [sendConfig]
+  );
+
+  const handleCauseIncident = useCallback(() => {
+    sendConfig({ type: 'cause_incident' });
+  }, [sendConfig]);
+
   const handleAddProfile = useCallback(
     (profileId: string) => {
       sendConfig({ type: 'add_profile', profile: profileId });
@@ -105,7 +116,7 @@ export function Dashboard({
         top: '16px',
         left: '16px',
         bottom: '16px',
-        width: collapsed ? '48px' : '320px',
+        width: collapsed ? '48px' : '350px',
         zIndex: 10,
         transition: 'width 0.3s ease',
         pointerEvents: 'auto',
@@ -188,6 +199,8 @@ export function Dashboard({
               }}
             >
               <h1
+                onClick={() => window.dispatchEvent(new Event('traffic-sim:show-onboarding'))}
+                title="Show welcome guide"
                 style={{
                   fontSize: '16px',
                   fontWeight: 700,
@@ -195,7 +208,12 @@ export function Dashboard({
                   background: 'linear-gradient(135deg, #4f8eff, #22d3ee)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  transition: 'opacity 0.15s ease',
                 }}
+                onMouseOver={(e) => (e.currentTarget.style.opacity = '0.7')}
+                onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
               >
                 Traffic Simulator
               </h1>
@@ -304,6 +322,93 @@ export function Dashboard({
 
           {activeTab === 'profiles' && (
             <div>
+              <div
+                style={{
+                  background: 'rgba(0, 255, 0, 0.06)',
+                  border: '1px solid rgba(0, 255, 0, 0.25)',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  marginBottom: '14px',
+                  fontSize: '11px',
+                  lineHeight: '1.5',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    color: '#00FF00',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Try the Experiment
+                </div>
+                Swap a few <span style={{ color: '#808080', fontWeight: 600 }}>Commuters</span> or
+                {' '}<span style={{ color: '#FFFF00', fontWeight: 600 }}>Cautious</span> drivers
+                for <span style={{ color: '#00FF00', fontWeight: 600 }}>Auto Pacers</span> and
+                watch the <span style={{ fontWeight: 700 }}>Flow Rate</span> climb. A handful of
+                jam-breakers absorbing shockwaves can move more traffic than a road full of
+                bumper-clinging humans.
+              </div>
+
+              {/* Driver-mix presets */}
+              <div style={{ marginBottom: '14px' }}>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    marginBottom: '6px',
+                  }}
+                >
+                  Quick Mix
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {[
+                    { id: 'default', label: 'Default', color: '#94a3b8' },
+                    { id: 'rush_hour', label: 'Rush Hour', color: '#f59e0b' },
+                    { id: 'autobahn', label: 'Autobahn', color: '#22d3ee' },
+                    { id: 'robotaxi', label: 'Robotaxi', color: '#00FF00' },
+                    { id: 'campers', label: 'Campers', color: '#a78bfa' },
+                    { id: 'demolition', label: 'Demolition', color: '#ef4444' },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleApplyPreset(p.id)}
+                      style={{
+                        flex: '1 1 calc(33% - 4px)',
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        border: `1px solid ${p.color}55`,
+                        color: p.color,
+                        padding: '6px 4px',
+                        borderRadius: '6px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = `${p.color}22`;
+                        e.currentTarget.style.borderColor = p.color;
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                        e.currentTarget.style.borderColor = `${p.color}55`;
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                 {[
                   { id: 'COMMUTER', label: 'Commuter', color: '#808080', tagline: 'The Baseline Driver', desc: 'The control group of the highway. Commuters drive at the speed limit, maintain standard following distances, and behave predictably. They change lanes only when an obvious speed advantage presents itself without disrupting the flow of others.' },
@@ -325,26 +430,49 @@ export function Dashboard({
                   );
                 })}
               </div>
-              <button
-                onClick={handleRemoveAll}
-                style={{
-                  width: '100%',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#ef4444',
-                  padding: '8px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  marginTop: '8px',
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)')}
-                onMouseOut={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)')}
-              >
-                REMOVE ALL CARS
-              </button>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                <button
+                  onClick={handleCauseIncident}
+                  title="Force a random car to slam its brakes for 3 seconds"
+                  style={{
+                    flex: 1,
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: '#f59e0b',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.28)')}
+                  onMouseOut={(e) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.15)')}
+                >
+                  ⚠ CAUSE INCIDENT
+                </button>
+                <button
+                  onClick={handleRemoveAll}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#ef4444',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)')}
+                  onMouseOut={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)')}
+                >
+                  REMOVE ALL
+                </button>
+              </div>
             </div>
           )}
 
