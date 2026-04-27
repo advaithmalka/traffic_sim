@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  base: process.env.GITHUB_ACTIONS ? '/traffic_sim/' : '/',
   server: {
     port: 5173,
     proxy: {

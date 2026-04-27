@@ -8,7 +8,7 @@ import type {
   TelemetrySnapshot,
 } from '../types';
 
-const WS_URL = `ws://${window.location.hostname}:8000/ws`;
+const WS_URL = import.meta.env.VITE_WS_URL ?? `ws://${window.location.hostname}:8000/ws`;
 const TELEMETRY_HISTORY_SIZE = 180; // 60 seconds at ~3 Hz
 const TELEMETRY_INTERVAL_MS = 333; // throttle telemetry updates to ~3 Hz
 
