@@ -6,7 +6,7 @@ import type { VehicleData } from '../types';
 
 
 
-const MODEL_PATH = '/models/car_low_poly_style.glb';
+const MODEL_PATH = `${import.meta.env.BASE_URL}models/car_low_poly_style.glb`;
 
 // Preload the model
 useGLTF.preload(MODEL_PATH);
